@@ -1,14 +1,11 @@
-// Arquivo: frontend/tailwind.config.ts
-// (V76 - Garantindo que o Tailwind leia a pasta 'src/app')
-
+// Arquivo: frontend/tailwind.config.ts (V76/V81)
 import type { Config } from "tailwindcss";
 
 const config: Config = {
   content: [
-    // Assegura que o Tailwind procure por classes (como 'bg-gray-700')
-    // nos arquivos dentro de 'src/app/'
+    // Garante que o Tailwind leia os arquivos .tsx em /app e /components
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
-    "./src/components/**/*.{js,ts,jsx,tsx,mdx}", // Adicionado por segurança
+    "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
     extend: {

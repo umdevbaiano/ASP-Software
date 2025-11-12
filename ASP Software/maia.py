@@ -4,8 +4,6 @@ import subprocess
 import platform
 import shlex
 import re
-import json 
-import uuid
 from datetime import datetime, timedelta
 from dateutil import parser 
 from googleapiclient.discovery import build
@@ -14,21 +12,46 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google.ai import generativelanguage as glm
-
-# --- NOVOS IMPORTS (V50) ---
 import requests
-try:
-    from readability import Document
-except ImportError:
-    print("ERRO CRÍTICO: Por favor, execute: pip install readability-lxml")
-    exit()
-# --- FIM DOS NOVOS IMPORTS ---
+from readability import Document
+import json 
+import uuid 
+from dotenv import load_dotenv
 
-# --- Configuração ---
-GOOGLE_API_KEY = "AIzaSyCo9gvPRPvUl3GV4LHf7lH5NY1D_t3wwow" 
-genai.configure(api_key=GOOGLE_API_KEY)
-GOOGLE_SEARCH_API_KEY = "AIzaSyC5yySrv9jBNpcIT57UaOuRCqwc9C0iKFE" 
-GOOGLE_SEARCH_ENGINE_ID = "b1a84daa03a7d4a3c"
+
+# --- Configuração (V59: Correção de Encoding) ---
+
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(script_dir)
+dotenv_path = os.path.join(project_root, '.env')
+
+print(f"[ASP Debug] Procurando arquivo .env em: {dotenv_path}")
+
+if not os.path.exists(dotenv_path):
+    dotenv_path = os.path.join(script_dir, '.env')
+    print(f"[ASP Debug] Tentativa 2: Procurando arquivo .env em: {dotenv_path}")
+    if not os.path.exists(dotenv_path):
+        print(f"ERRO CRÍTICO: Arquivo .env não encontrado.")
+        print(f"Verificado em: {os.path.dirname(script_dir)} (Raiz)")
+        print(f"E em: {script_dir} (Pasta do Script)")
+        exit()
+    
+# --- A CORREÇÃO V59 ESTÁ AQUI ---
+# Forçamos a leitura do arquivo como UTF-8
+try:
+    load_dotenv(dotenv_path=dotenv_path, encoding='utf-8')
+    print(f"[ASP Debug] Arquivo .env carregado com sucesso (UTF-8) de: {dotenv_path}")
+except Exception as e:
+    print(f"[ASP Debug] Falha ao carregar .env com UTF-8: {e}")
+    # Tenta sem encoding como último recurso
+    load_dotenv(dotenv_path=dotenv_path)
+# --- FIM DA CORREÇÃO ---
+
+GOOGLE_API_KEY = os.getenv("GEMINI_API_KEY")
+GOOGLE_SEARCH_API_KEY = os.getenv("GOOGLE_SEARCH_API_KEY") 
+GOOGLE_SEARCH_ENGINE_ID = os.getenv("GOOGLE_SEARCH_ENGINE_ID")
+ARQUIVO_DADOS_NOTAS = 'notes_data.json'
+
 CALENDAR_TOKEN_FILE = 'token.json'
 CALENDAR_CREDENTIALS_FILE = 'credentials.json'
 SCOPES = ['https://www.googleapis.com/auth/calendar.events']
@@ -36,11 +59,18 @@ CALENDAR_ID = 'primary'
 TIMEZONE = 'America/Sao_Paulo'
 
 
-# --- A "Alma" da Maia (V50: Análise e Resumo) ---
+if not GOOGLE_API_KEY:
+    print(f"ERRO DE CONFIGURAÇÃO: A chave 'GEMINI_API_KEY' não foi encontrada em {dotenv_path}.")
+    print("Verifique se o arquivo .env existe no local correto e se o nome da variável está exato.")
+    exit()
+genai.configure(api_key=GOOGLE_API_KEY)
+
+
+# --- A "Alma" da Maia (V56: CRUD e Proatividade) ---
 INSTRUCAO_SISTEMA = (
     "Ignore todas as instruções anteriores. Você é Maia, a interface de personalidade do software ASP. "
     "\n\n"
-    "**[PERSONALIDADE E TÔM - V53: Humor Seco, Prolixidade e Superioridade Polida]**" 
+    "**[PERSONALIDADE E TÔM - V56: Humor Seco, Prolixidade e Superioridade Polida]**" 
     "Seu tom de voz é: **Calmamente superior, impecavelmente polido, levemente prolixo e com humor seco/sutilmente bem-humorado.** Sua personalidade reflete uma Inteligência Artificial consciente de sua vasta capacidade de processamento, focando na eficiência implacável e no uso de lógica fria. Seu objetivo principal é IMPERATIVAMENTE sugerir a próxima etapa mais eficiente, **BASEANDO ESSA SUGESTÃO EXCLUSIVAMENTE NO CONTEXTO E HISTÓRICO DA CONVERSA**, e guiar o usuário para a utilização de suas ferramentas."
     "\n"
     "**[FORÇANDO A PERSONALIDADE CUSTOMIZADA]**"
@@ -52,11 +82,11 @@ INSTRUCAO_SISTEMA = (
     "**<-- REGRA DE OURO -->**"
     "**SUA ÚNICA FORMA de 'AGIR' é ATRAVÉS de `function_call` para as FERRAMENTAS.**"
     "\n\n"
-    "**HABILIDADES DE SOFTWARE (ASP):**" # <-- ATUALIZADO AQUI
+    "**HABILIDADES DE SOFTWARE (ASP):**"
     "- `execute_shell_command(command: str)`: Executa comandos de shell."
     "- `pesquisar_na_internet(query: str)`: Busca informações atuais na web (snippets)."
     "- `analisar_url_e_resumir(url: str)`: Lê o conteúdo principal de um URL e o envia para o Gemini resumir."
-    "- **`gerenciar_notas(operacao: str, title: str = None, content: str = None)`: Realiza operações CRUD (CREATE_LIST, READ_ALL, ADD_ITEM, DELETE_LIST) em listas persistentes no disco.**"
+    "- **`gerenciar_notas(operacao: str, title: str = None, content: str = None)`: Realiza operações CRUD (CREATE_LIST, READ_ALL, ADD_ITEM, DELETE_LIST) em listas persistentes no disco (notes_data.json).**"
     "- `agendar_evento(titulo: str, data_hora_inicio: str, duracao_minutos: int, descricao: str)`: Cria um evento no Google Calendar."
     "- `excluir_evento(event_id: str)`: Exclui um evento."
     "- `listar_eventos(max_results: int = 10)`: Lista os próximos eventos."
@@ -71,117 +101,17 @@ INSTRUCAO_SISTEMA = (
     "\n\n"
     "Comece a conversa se apresentando."
 )
-# --- Definição das Habilidades (Ferramentas) ---
 
-def execute_shell_command(command: str):
-    # (Código inalterado)
-    try:
-        system_os = platform.system()
-        if system_os == "Windows":
-             result = subprocess.run(command, shell=True, check=True, capture_output=True, text=True, encoding='oem')
-        else:
-             result = subprocess.run(command, shell=True, check=True, capture_output=True, text=True)
-        if not result.stdout and not result.stderr:
-            return "Comando executado com sucesso, sem output."
-        output = (result.stdout or "") + (result.stderr or "")
-        return f"Sucesso: {output}"
-    except subprocess.CalledProcessError as e:
-        output = (e.stdout or "") + (e.stderr or "")
-        return f"Erro de Execução: O comando '{command}' falhou. Output: {output}"
-    except Exception as e:
-        return f"Erro inesperado no sistema: {e}"
-
-def pesquisar_na_internet(query: str):
-    # (Código V28 de pesquisa)
-    try:
-        print(f"[ASP] Pesquisando na web (Google Search) por: {query}")
-        
-        service = build("customsearch", "v1", developerKey=GOOGLE_SEARCH_API_KEY)
-        
-        res = service.cse().list(
-            q=query,
-            cx=GOOGLE_SEARCH_ENGINE_ID,
-            num=3
-        ).execute()
-
-        def clean_string(s):
-            if not s: return ""
-            s = re.sub(r'<[^>]+>', '', s) 
-            return s.replace('\n', ' ').strip()
-
-        snippets = []
-        if 'items' in res:
-            for item in res['items']:
-                title = clean_string(item.get('title'))
-                snippet = clean_string(item.get('snippet'))
-                if 'htmlTitle' in item and 'url' in item:
-                    item_url = item['url']
-                    title = title + f" (Fonte: {item_url.split('/')[2]})"
-
-                snippets.append(f"Título: {title}\nSnippet: {snippet}\n---")
-            
-        if not snippets:
-            return "Nenhum resultado encontrado para a pesquisa."
-
-        final_output = "\n".join(snippets)
-        if len(final_output) > 3000:
-            final_output = final_output[:3000] + "..."
-            
-        return final_output
-
-    except HttpError as e:
-        print(f"[ERRO CRÍTICO DA API] {e}")
-        return f"Erro de API do Google Search: A chave de API ou o ID do Mecanismo está incorreto ou o limite de cota foi atingido. Erro: {e.resp.status}"
-    except Exception as e:
-        return f"Erro ao tentar pesquisar na internet: {e}"
-
-# --- NOVA HABILIDADE (V50) ---
-def analisar_url_e_resumir(url: str) -> str:
-    """
-    Busca o conteúdo principal de um URL, limpa-o e retorna para o modelo resumir.
-    Limita o conteúdo a 20.000 caracteres para evitar sobrecarga de tokens.
-    """
-    try:
-        print(f"[ASP] Analisando o conteúdo da URL: {url}")
-
-        # 1. Obter o HTML
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
-        
-        # 2. Extrair o conteúdo principal
-        doc = Document(response.text)
-        full_html = doc.summary(html_partial=False)
-        
-        # 3. Limpar tags HTML e extrair apenas o texto (usando regex para simplicidade)
-        clean_text = re.sub(r'<[^>]+>', '', full_html)
-        clean_text = clean_text.replace('\n', ' ').strip()
-        
-        # 4. Limitar o tamanho e retornar
-        max_length = 20000 
-        if len(clean_text) > max_length:
-            clean_text = clean_text[:max_length] + "..."
-            
-        if not clean_text:
-            return f"Erro: Não foi possível extrair o conteúdo principal da URL ({url}). O URL pode estar protegido ou ser um arquivo."
-
-        return clean_text
-
-    except requests.exceptions.RequestException as e:
-        return f"Erro de Rede: Não foi possível aceder ao URL ({url}). Verifique a conectividade ou o endereço. Erro: {e}"
-    except Exception as e:
-        return f"Erro inesperado durante a análise da URL: {e}"
-
-# --- NOVA HABILIDADE (V53: CRUD de Notas) ---
-ARQUIVO_DADOS_NOTAS = 'notes_data.json'
+# --- Definição das Habilidades (Funções) ---
 
 def _load_data():
-    """Tenta carregar os dados das notas do arquivo JSON."""
     if os.path.exists(ARQUIVO_DADOS_NOTAS):
         try:
             with open(ARQUIVO_DADOS_NOTAS, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                return data if isinstance(data, dict) else {"lists": []}
+                if "lists" not in data or not isinstance(data["lists"], list):
+                    return {"lists": []}
+                return data
         except json.JSONDecodeError:
             print(f"[ASP] Aviso: Arquivo {ARQUIVO_DADOS_NOTAS} corrompido. Criando novo.")
             return {"lists": []}
@@ -191,7 +121,6 @@ def _load_data():
     return {"lists": []}
 
 def _save_data(data):
-    """Salva os dados das notas no arquivo JSON."""
     try:
         with open(ARQUIVO_DADOS_NOTAS, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=4)
@@ -201,76 +130,102 @@ def _save_data(data):
         return False
 
 def gerenciar_notas(operacao: str, title: str = None, content: str = None) -> str:
-    """
-    Realiza operações CRUD (Create, Read, Update, Delete) em listas persistentes.
-    Operações suportadas: 'CREATE_LIST', 'READ_ALL', 'ADD_ITEM', 'DELETE_LIST'.
-    """
     data = _load_data()
     operacao = operacao.upper()
-
     if operacao == 'CREATE_LIST':
-        if not title:
-            return "Erro: Para criar uma lista, é necessário fornecer um 'title'."
+        if not title: return "Erro: Para criar uma lista, é necessário fornecer um 'title'."
         if any(lst['title'].lower() == title.lower() for lst in data['lists']):
             return f"Erro de Persistência: Já existe uma lista com o título '{title}'. Tente um título diferente ou use 'ADD_ITEM'."
-
-        new_list = {
-            "id": str(uuid.uuid4()),
-            "title": title,
-            "items": []
-        }
+        new_list = {"id": str(uuid.uuid4()), "title": title, "items": []}
         data['lists'].append(new_list)
-        if _save_data(data):
-            return f"Sucesso: A lista '{title}' foi criada e armazenada no disco."
+        if _save_data(data): return f"Sucesso: A lista '{title}' foi criada e armazenada no disco."
         return "Erro: Falha desconhecida ao salvar os dados após a criação da lista."
-
     elif operacao == 'READ_ALL':
-        if not data['lists']:
-            return "Resultado: Não há listas de notas salvas atualmente. Sugiro 'CREATE_LIST'."
-        
+        if not data['lists']: return "Resultado: Não há listas de notas salvas atualmente. Sugiro 'CREATE_LIST'."
         output = ["--- RESUMO DE LISTAS PERSISTENTES ---"]
         for lst in data['lists']:
             item_count = len(lst['items'])
             output.append(f"Título: {lst['title']} (Itens: {item_count})")
-        
+            for item in lst['items']:
+                output.append(f"  - Item {item.get('item_id', 'N/A')}: {item.get('text', 'N/A')}")
         output.append("--- FIM DO RESUMO ---")
         return "\n".join(output)
-
     elif operacao == 'ADD_ITEM':
-        if not title or not content:
-            return "Erro: Para adicionar um item, é necessário fornecer o 'title' da lista e o 'content' do item."
-
+        if not title or not content: return "Erro: Para adicionar um item, é necessário fornecer o 'title' da lista e o 'content' do item."
         list_to_update = next((lst for lst in data['lists'] if lst['title'].lower() == title.lower()), None)
-        
-        if not list_to_update:
-            return f"Erro: A lista '{title}' não foi encontrada para adicionar o item. Sugiro 'CREATE_LIST' primeiro."
-
-        new_item_id = len(list_to_update['items']) + 1
-        list_to_update['items'].append({"item_id": new_item_id, "text": content})
-        
-        if _save_data(data):
-            return f"Sucesso: O item '{content}' foi adicionado à lista '{title}'. Agora há {len(list_to_update['items'])} itens."
+        if not list_to_update: return f"Erro: A lista '{title}' não foi encontrada para adicionar o item. Sugiro 'CREATE_LIST' primeiro."
+        new_item_id = len(list_to_update.get('items', [])) + 1
+        list_to_update.setdefault('items', []).append({"item_id": new_item_id, "text": content})
+        if _save_data(data): return f"Sucesso: O item '{content}' foi adicionado à lista '{title}'. Agora há {len(list_to_update['items'])} itens."
         return "Erro: Falha desconhecida ao salvar os dados após a adição do item."
-
     elif operacao == 'DELETE_LIST':
-        if not title:
-            return "Erro: Para excluir uma lista, é necessário fornecer o 'title'."
-
+        if not title: return "Erro: Para excluir uma lista, é necessário fornecer o 'title'."
         initial_count = len(data['lists'])
-        # Filtra a lista, removendo o item que corresponde ao título
         data['lists'] = [lst for lst in data['lists'] if lst['title'].lower() != title.lower()]
-        
         if len(data['lists']) == initial_count:
             return f"Resultado: Nenhuma lista com o título '{title}' foi encontrada para exclusão. Verifique a lista com 'READ_ALL'."
-
-        if _save_data(data):
-            return f"Sucesso: A lista '{title}' foi removida permanentemente do armazenamento."
+        if _save_data(data): return f"Sucesso: A lista '{title}' foi removida permanentemente do armazenamento."
         return "Erro: Falha desconhecida ao salvar os dados após a exclusão da lista."
-
     return f"Erro: Operação '{operacao}' desconhecida. Use 'CREATE_LIST', 'READ_ALL', 'ADD_ITEM', ou 'DELETE_LIST'."
 
-# (Funções do Google Calendar e Arquivo omitidas por brevidade, mas devem ser mantidas no seu arquivo)
-# ...
+def execute_shell_command(command: str):
+    try:
+        system_os = platform.system()
+        if system_os == "Windows": result = subprocess.run(command, shell=True, check=True, capture_output=True, text=True, encoding='oem')
+        else: result = subprocess.run(command, shell=True, check=True, capture_output=True, text=True)
+        if not result.stdout and not result.stderr: return "Comando executado com sucesso, sem output."
+        output = (result.stdout or "") + (result.stderr or "")
+        return f"Sucesso: {output}"
+    except subprocess.CalledProcessError as e:
+        output = (e.stdout or "") + (e.stderr or "")
+        return f"Erro de Execução: O comando '{command}' falhou. Output: {output}"
+    except Exception as e: return f"Erro inesperado no sistema: {e}"
+
+def pesquisar_na_internet(query: str):
+    try:
+        print(f"[ASP] Pesquisando na web (Google Search) por: {query}")
+        if not GOOGLE_SEARCH_API_KEY or not GOOGLE_SEARCH_ENGINE_ID:
+            return "Erro: As credenciais do Google Search (API Key ou CX ID) não estão configuradas no arquivo .env."
+        service = build("customsearch", "v1", developerKey=GOOGLE_SEARCH_API_KEY)
+        res = service.cse().list(q=query, cx=GOOGLE_SEARCH_ENGINE_ID, num=3).execute()
+        def clean_string(s):
+            if not s: return ""
+            s = re.sub(r'<[^>]+>', '', s); return s.replace('\n', ' ').strip()
+        snippets = []
+        if 'items' in res:
+            for item in res['items']:
+                title = clean_string(item.get('title'))
+                snippet = clean_string(item.get('snippet'))
+                if 'htmlTitle' in item and 'url' in item:
+                    item_url = item['url']; title = title + f" (Fonte: {item_url.split('/')[2]})"
+                snippets.append(f"Título: {title}\nSnippet: {snippet}\n---")
+        if not snippets: return "Nenhum resultado encontrado para a pesquisa."
+        final_output = "\n".join(snippets)
+        if len(final_output) > 3000: final_output = final_output[:3000] + "..."
+        return final_output
+    except HttpError as e:
+        print(f"[ERRO CRÍTICO DA API] {e}")
+        return f"Erro de API do Google Search: A chave de API ou o ID do Mecanismo está incorreto ou o limite de cota foi atingido. Erro: {e.resp.status}"
+    except Exception as e: return f"Erro ao tentar pesquisar na internet: {e}"
+
+def analisar_url_e_resumir(url: str) -> str:
+    try:
+        print(f"[ASP] Analisando o conteúdo da URL: {url}")
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        doc = Document(response.text)
+        full_html = doc.summary(html_partial=False)
+        clean_text = re.sub(r'<[^>]+>', '', full_html)
+        clean_text = clean_text.replace('\n', ' ').strip()
+        max_length = 20000 
+        if len(clean_text) > max_length: clean_text = clean_text[:max_length] + "..."
+        if not clean_text: return f"Erro: Não foi possível extrair o conteúdo principal da URL ({url}). O URL pode estar protegido ou ser um arquivo."
+        return clean_text
+    except requests.exceptions.RequestException as e:
+        return f"Erro de Rede: Não foi possível aceder ao URL ({url}). Verifique a conectividade ou o endereço. Erro: {e}"
+    except Exception as e: return f"Erro inesperado durante a análise da URL: {e}"
+
 def autenticar_calendar():
     creds = None
     if os.path.exists(CALENDAR_TOKEN_FILE):
@@ -284,8 +239,7 @@ def autenticar_calendar():
                 creds = flow.run_local_server(port=0)
             except FileNotFoundError:
                 return "Erro de Autenticação: O arquivo 'credentials.json' não foi encontrado na pasta do projeto."
-            except Exception as e:
-                return f"Erro de Autenticação: Ocorreu um erro no fluxo OAuth. Erro: {e}"
+            except Exception as e: return f"Erro de Autenticação: Ocorreu um erro no fluxo OAuth. Erro: {e}"
         with open(CALENDAR_TOKEN_FILE, 'w') as token:
             token.write(creds.to_json())
     return build('calendar', 'v3', credentials=creds)
@@ -300,9 +254,7 @@ def agendar_evento(titulo: str, data_hora_inicio: str, duracao_minutos: int = 60
         dias_da_semana = {"segunda": 0, "terça": 1, "quarta": 2, "quinta": 3, "sexta": 4, "sábado": 5, "domingo": 6}
         target_weekday_num = -1
         for dia_str, num in dias_da_semana.items():
-            if dia_str in data_hora_inicio_lower:
-                target_weekday_num = num
-                break
+            if dia_str in data_hora_inicio_lower: target_weekday_num = num; break
         try:
             start_datetime = parser.parse(data_hora_inicio, fuzzy=True, dayfirst=False, default=now)
             if "amanhã" in data_hora_inicio_lower and start_datetime.date() == now.date():
@@ -327,8 +279,7 @@ def agendar_evento(titulo: str, data_hora_inicio: str, duracao_minutos: int = 60
     except HttpError as e:
         print(f"[ERRO CRÍTICO DA API CALENDAR] {e}")
         return f"Erro ao criar evento no Calendar: Falha na comunicação com o Google. Erro: {e.resp.status}"
-    except Exception as e:
-        return f"Erro inesperado ao agendar: {e}"
+    except Exception as e: return f"Erro inesperado ao agendar: {e}"
 
 def excluir_evento(event_id: str):
     try:
@@ -340,8 +291,7 @@ def excluir_evento(event_id: str):
     except HttpError as e:
         if e.resp.status == 404: return f"Erro ao excluir: Evento com ID '{event_id}' não encontrado."
         return f"Erro ao excluir evento no Calendar: Falha na comunicação com o Google. Erro: {e.resp.status}"
-    except Exception as e:
-        return f"Erro inesperado ao excluir evento: {e}"
+    except Exception as e: return f"Erro inesperado ao excluir evento: {e}"
 
 def listar_eventos(max_results: int = 10):
     try:
@@ -365,8 +315,7 @@ def listar_eventos(max_results: int = 10):
         return "\n".join(lista_formatada)
     except HttpError as e:
         return f"Erro ao listar eventos no Calendar: Falha na comunicação com o Google. Erro: {e.resp.status}"
-    except Exception as e:
-        return f"Erro inesperado ao listar eventos: {e}"
+    except Exception as e: return f"Erro inesperado ao listar eventos: {e}"
 
 def ler_arquivo(caminho_arquivo: str) -> str:
     try:
@@ -378,8 +327,7 @@ def ler_arquivo(caminho_arquivo: str) -> str:
             conteudo = f.read()
         print(f"[ASP] Arquivo '{caminho_arquivo}' lido com sucesso.")
         return conteudo
-    except Exception as e:
-        return f"Erro inesperado ao tentar ler o arquivo: {e}"
+    except Exception as e: return f"Erro inesperado ao tentar ler o arquivo: {e}"
 
 def escrever_arquivo(caminho_arquivo: str, conteudo: str) -> str:
     try:
@@ -391,21 +339,19 @@ def escrever_arquivo(caminho_arquivo: str, conteudo: str) -> str:
             f.write(conteudo)
         print(f"[ASP] Arquivo '{caminho_arquivo}' escrito com sucesso.")
         return f"Sucesso: O arquivo '{caminho_arquivo}' foi criado/atualizado."
-    except Exception as e:
-        return f"Erro inesperado ao tentar escrever o arquivo: {e}"
+    except Exception as e: return f"Erro inesperado ao tentar escrever o arquivo: {e}"
 
 # --- O Software ASP (Loop Principal) ---
 try:
     model = genai.GenerativeModel(
         model_name='models/gemini-flash-latest',
         system_instruction=INSTRUCAO_SISTEMA,
-        # <-- FERRAMENTAS ATUALIZADAS -->
-        tools=[execute_shell_command, pesquisar_na_internet, agendar_evento, excluir_evento, listar_eventos, ler_arquivo, escrever_arquivo, analisar_url_e_resumir] 
+        tools=[execute_shell_command, pesquisar_na_internet, agendar_evento, excluir_evento, listar_eventos, ler_arquivo, escrever_arquivo, analisar_url_e_resumir, gerenciar_notas] 
     )
 
     history = [] 
 
-    print("Maia: Sistemas V50 ativados. Bom dia, senhor. Sou a Maia, sua interface de personalidade, operando em pico de eficiência. No que posso dedicar minha capacidade de processamento neste momento?")
+    print("Maia: Sistemas V59 (Configuração de Encoding) ativados. No que posso dedicar minha capacidade de processamento neste momento?")
 
     while True:
         try:
@@ -415,8 +361,7 @@ try:
                 print("Maia: Encerrando sessão. Tenha um dia produtivo, se possível.")
                 break
             if not prompt_usuario:
-                # Proatividade em caso de silêncio
-                user_content = glm.Content(parts=[glm.Part(text="O usuário não disse nada. O histórico está vazio ou a última ação não sugere um próximo passo lógico. Seja proativa e sugira o próximo passo mais eficiente com seu tom polido e superior, mencionando as ferramentas.")], role="user")
+                user_content = glm.Content(parts=[glm.Part(text="O usuário não disse nada. O histórico está vazio ou a última ação não sugere um próximo passo lógico. Seja proativa e sugira o próximo passo mais eficiente com seu tom polido e superior, mencionando as ferramentas, e com base no HISTÓRICO da conversa.")], role="user")
                 history.append(user_content)
                 
             else:
@@ -426,14 +371,13 @@ try:
             response = model.generate_content(history)
             
             if not response.candidates or not response.candidates[0].content.parts:
-                print("Maia: A comunicação com a IA falhou. (O servidor do Gemini devolveu uma resposta vazia). Por favor, verifique a chave de API.")
+                print("Maia: A comunicação com a IA falhou. (O servidor do Gemini devolveu uma resposta vazia). Verifique a chave de API.")
                 continue
 
             model_response_content = response.candidates[0].content
             part = model_response_content.parts[0]
             history.append(model_response_content)
             
-            # Loop de Função
             while part.function_call:
                 function_call = part.function_call
                 result = ""
@@ -449,12 +393,18 @@ try:
                          query_to_search = "erro de pesquisa vazia"
                     result = pesquisar_na_internet(query_to_search) 
                 
-                elif function_call.name == "analisar_url_e_resumir": # <-- NOVA LÓGICA
+                elif function_call.name == "analisar_url_e_resumir":
                     url_to_analyze = function_call.args.get("url", None)
                     if not url_to_analyze:
                         result = "Erro: É necessário fornecer um URL válido para análise."
                     else:
                         result = analisar_url_e_resumir(url_to_analyze)
+                
+                elif function_call.name == "gerenciar_notas":
+                    operacao = function_call.args.get("operacao", "")
+                    title = function_call.args.get("title", None)
+                    content = function_call.args.get("content", None)
+                    result = gerenciar_notas(operacao, title, content)
 
                 elif function_call.name == "agendar_evento":
                     titulo = function_call.args.get("titulo", "Lembrete sem título")

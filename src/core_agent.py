@@ -1,10 +1,12 @@
+# src/core_agent.py (V65 - Refatorado para usar Dicts/JSON)
 import google.generativeai as genai
-from google.ai import generativelanguage as glm
+from google.ai import generativelanguage as glm # Usado apenas para a função helper
 import os
+from typing import List, Dict, Any
 
 # Importa a configuração (chaves) e a "Alma"
-from src.config import GEMINI_API_KEY, PROJECT_ROOT
-from src.system_prompt import INSTRUCAO_SISTEMA # (Vamos criar este arquivo)
+from src.config import GEMINI_API_KEY
+from src.system_prompt import INSTRUCAO_SISTEMA
 
 # Importa TODAS as ferramentas dos módulos
 from src.tools.system import execute_shell_command, ler_arquivo, escrever_arquivo
@@ -16,10 +18,8 @@ from src.tools.calendar import agendar_evento, excluir_evento, listar_eventos
 def initialize_model():
     """Configura e retorna o modelo GenerativeModel com todas as ferramentas."""
     
-    # Configura a chave do Gemini
     genai.configure(api_key=GEMINI_API_KEY)
     
-    # Lista de todas as funções que a Maia pode chamar
     all_tools = [
         execute_shell_command, pesquisar_na_internet, agendar_evento, 
         excluir_evento, listar_eventos, ler_arquivo, escrever_arquivo, 
@@ -33,97 +33,115 @@ def initialize_model():
     )
     return model
 
-def run_chat_loop():
-    """Inicia e gerencia o loop de chat principal com o usuário."""
-    
-    model = initialize_model()
-    history = []
-    
-    # Define os caminhos dos arquivos de autenticação relativos à raiz do projeto
-    os.chdir(PROJECT_ROOT) 
+# --- NOVA FUNÇÃO HELPER (V65) ---
+def _content_to_dict(content: glm.Content) -> Dict[str, Any]:
+    """Converte um objeto glm.Content (da IA) em um dicionário JSON serializável."""
+    parts_list = []
+    for part in content.parts:
+        part_dict = {}
+        if part.text:
+            part_dict["text"] = part.text
+        # Converte a chamada de função (se existir)
+        elif hasattr(part, 'function_call'):
+            part_dict["function_call"] = {
+                "name": part.function_call.name,
+                "args": dict(part.function_call.args),
+            }
+        # Converte a resposta da função (se existir)
+        elif hasattr(part, 'function_response'):
+            part_dict["function_response"] = {
+                "name": part.function_response.name,
+                "response": dict(part.function_response.response),
+            }
+        parts_list.append(part_dict)
+    return {"role": content.role, "parts": parts_list}
+# --- FIM DA FUNÇÃO HELPER ---
 
-    print("Maia: Sistemas V61 (Refatorados) ativados. Otimização de persistência (CRUD) concluída. No que posso dedicar minha capacidade de processamento neste momento?")
 
-    while True:
-        try:
-            prompt_usuario = input("Você: ")
+model = initialize_model() # Inicializa o modelo quando o servidor carregar
 
-            if prompt_usuario.lower() == 'sair':
-                print("Maia: Encerrando sessão. Tenha um dia produtivo, se possível.")
-                break
-            if not prompt_usuario:
-                user_content = glm.Content(parts=[glm.Part(text="O usuário não disse nada. O histórico está vazio ou a última ação não sugere um próximo passo lógico. Seja proativa e sugira o próximo passo mais eficiente com seu tom polido e superior, mencionando as ferramentas, e com base no HISTÓRICO da conversa.")], role="user")
-                history.append(user_content)
+# --- O Cérebro V65 (Refatorado para Dicts) ---
+def processar_turno_do_chat(history_list: List[Dict[str, Any]], user_prompt: str) -> (List[Dict[str, Any]], str):
+    """
+    Processa um turno, usando DICTs (JSON) para o histórico.
+    """
+    try:
+        # 1. Adiciona o prompt do usuário (como dict)
+        history_list.append({"role": "user", "parts": [{"text": user_prompt}]})
+        
+        # 2. Envia a história (List[Dict]) para a IA. 
+        # A biblioteca google-generativeai lida com a conversão interna.
+        response = model.generate_content(history_list)
+
+        if not response.candidates or not response.candidates[0].content.parts:
+            # Se a resposta falhar, retorna o histórico atual (com o prompt do usuário)
+            return history_list, "A comunicação com a IA falhou (resposta vazia). Verifique a chave de API."
+
+        # 3. CONVERTE a resposta (glm.Content) para dict
+        model_response_content = response.candidates[0].content
+        model_response_dict = _content_to_dict(model_response_content)
+        part = model_response_dict['parts'][0]
+        history_list.append(model_response_dict)
+
+        # --- Loop de Função (O "Agente") ---
+        while "function_call" in part:
+            function_call_dict = part["function_call"]
+            
+            tool_map = {
+                "execute_shell_command": execute_shell_command,
+                "pesquisar_na_internet": pesquisar_na_internet,
+                "analisar_url_e_resumir": analisar_url_e_resumir,
+                "gerenciar_notas": gerenciar_notas,
+                "agendar_evento": agendar_evento,
+                "excluir_evento": excluir_evento,
+                "listar_eventos": listar_eventos,
+                "ler_arquivo": ler_arquivo,
+                "escrever_arquivo": escrever_arquivo,
+            }
+            
+            func_to_call = tool_map.get(function_call_dict["name"])
+            
+            if not func_to_call:
+                result = f"Erro: Função desconhecida '{function_call_dict['name']}'."
             else:
-                user_content = glm.Content(parts=[glm.Part(text=prompt_usuario)], role="user")
-                history.append(user_content)
+                args = function_call_dict.get("args", {})
+                print(f"[ASP] Executando: {function_call_dict['name']}({args})")
+                
+                try:
+                    result = func_to_call(**args)
+                except TypeError as e:
+                    result = f"Erro de Argumento: A IA tentou chamar {function_call_dict['name']} com argumentos inválidos. {e}"
+                except Exception as e:
+                    result = f"Erro inesperado na execução da ferramenta: {e}"
+
+            # Prepara a resposta da função (como dict)
+            function_response_content = {
+                "role": "model",
+                "parts": [{
+                    "function_response": {
+                        "name": function_call_dict["name"],
+                        "response": {"output": result}
+                    }
+                }]
+            }
+            history_list.append(function_response_content)
             
-            response = model.generate_content(history)
+            # Chama a IA novamente
+            response_2 = model.generate_content(history_list)
             
-            if not response.candidates or not response.candidates[0].content.parts:
-                print("Maia: A comunicação com a IA falhou. (O servidor do Gemini devolveu uma resposta vazia). Verifique a chave de API.")
-                continue
+            if not response_2.candidates: 
+                history_list.append({"role": "model", "parts": [{"text": "A comunicação de segunda etapa falhou."}]})
+                break
 
-            model_response_content = response.candidates[0].content
-            part = model_response_content.parts[0]
-            history.append(model_response_content)
+            model_response_content = response_2.candidates[0].content
+            model_response_dict = _content_to_dict(model_response_content)
+            history_list.append(model_response_dict)
+            part = model_response_dict['parts'][0]
             
-            # --- Loop de Função (O "Agente") ---
-            while part.function_call:
-                function_call = part.function_call
-                
-                # Mapeia o nome da função (string) para a função Python real
-                tool_map = {
-                    "execute_shell_command": execute_shell_command,
-                    "pesquisar_na_internet": pesquisar_na_internet,
-                    "analisar_url_e_resumir": analisar_url_e_resumir,
-                    "gerenciar_notas": gerenciar_notas,
-                    "agendar_evento": agendar_evento,
-                    "excluir_evento": excluir_evento,
-                    "listar_eventos": listar_eventos,
-                    "ler_arquivo": ler_arquivo,
-                    "escrever_arquivo": escrever_arquivo,
-                }
-                
-                func_to_call = tool_map.get(function_call.name)
-                
-                if not func_to_call:
-                    result = f"Erro: Função desconhecida '{function_call.name}'."
-                else:
-                    # Extrai os argumentos que a IA enviou
-                    args = {key: value for key, value in function_call.args.items()}
-                    print(f"[ASP] Executando: {function_call.name}({args})")
-                    
-                    try:
-                        # Executa a função Python com os argumentos
-                        result = func_to_call(**args)
-                    except TypeError as e:
-                        result = f"Erro de Argumento: A IA tentou chamar {function_call.name} com argumentos inválidos. {e}"
-                    except Exception as e:
-                        result = f"Erro inesperado na execução da ferramenta: {e}"
+        final_text_response = part.get("text", "Ocorreu um erro ao processar a resposta da função.")
+        return history_list, final_text_response
 
-                # Envia o resultado de volta para a IA
-                function_response_part = glm.Part(function_response=glm.FunctionResponse(
-                        name=function_call.name,
-                        response={"output": result}
-                ))
-                function_response_content = glm.Content(parts=[function_response_part], role="model")
-                history.append(function_response_content)
-                
-                # Pede a próxima resposta (que deve ser texto)
-                response_2 = model.generate_content(history)
-                
-                if not response_2.candidates: 
-                    print("Maia: A comunicação de segunda etapa falhou.")
-                    break
-
-                model_response_content = response_2.candidates[0].content
-                history.append(model_response_content)
-                part = model_response_content.parts[0]
-                
-            final_text_response = part.text
-            print(f"Maia: {final_text_response}\n")
-
-        except Exception as e:
-            print(f"Maia: Perdoe-me, encontrei uma anomalia na comunicação: {e}")
-            break
+    except Exception as e:
+        print(f"Erro no processar_turno_do_chat: {e}")
+        # Retorna o histórico para o frontend, mesmo em caso de erro
+        return history_list, f"Perdoe-me, encontrei uma anomalia na comunicação: {e}"

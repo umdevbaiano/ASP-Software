@@ -1,0 +1,30 @@
+{
+    "lists": [
+        {
+            "id": "bd9d0dcb-7bb4-4110-a9db-5788b7b7f2dc",
+            "title": "Lista de Compras",
+            "items": [
+                {
+                    "item_id": 1,
+                    "text": "Feij\u00e3o"
+                },
+                {
+                    "item_id": 2,
+                    "text": "Arroz"
+                },
+                {
+                    "item_id": 3,
+                    "text": "Macarr\u00e3o"
+                },
+                {
+                    "item_id": 4,
+                    "text": "Tomate"
+                },
+                {
+                    "item_id": 5,
+                    "text": "Alface"
+                }
+            ]
+        }
+    ]
+}

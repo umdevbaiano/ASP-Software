@@ -1,0 +1,9 @@
+/* Arquivo: frontend/src/app/globals.css (V74/V75) */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  color: white;
+  background: #030712; /* Fundo escuro principal */
+}

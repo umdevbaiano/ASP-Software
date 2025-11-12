@@ -7,3 +7,7 @@ python-dateutil
 requests
 readability-lxml
 python-dotenv
+fastapi
+uvicorn[standard]
+pydantic
+fastapi-cors

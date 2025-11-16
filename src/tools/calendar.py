@@ -13,7 +13,6 @@ from src.config import (
 )
 
 def autenticar_calendar():
-    """Lida com o fluxo de autenticação OAuth (run_local_server) e retorna o objeto de serviço do Calendar."""
     creds = None
     if os.path.exists(CALENDAR_TOKEN_FILE):
         creds = Credentials.from_authorized_user_file(CALENDAR_TOKEN_FILE, SCOPES)
@@ -32,7 +31,6 @@ def autenticar_calendar():
     return build('calendar', 'v3', credentials=creds)
 
 def agendar_evento(titulo: str, data_hora_inicio: str, duracao_minutos: int = 60, descricao: str = ''):
-    """Cria um evento no Google Calendar. Usa dateutil para parsing flexível da data."""
     try:
         print(f"[ASP] Tentando agendar: {titulo} em {data_hora_inicio}")
         service_or_error = autenticar_calendar()
@@ -83,7 +81,6 @@ def excluir_evento(event_id: str):
     except Exception as e: return f"Erro inesperado ao excluir evento: {e}"
 
 def listar_eventos(max_results: int = 10):
-    """Busca e lista os próximos eventos no Google Calendar."""
     try:
         print(f"[ASP] Tentando listar os {max_results} próximos eventos.")
         service_or_error = autenticar_calendar()

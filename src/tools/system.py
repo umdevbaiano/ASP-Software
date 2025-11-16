@@ -3,12 +3,9 @@ import subprocess
 import platform
 import shlex
 import re
-
-# (Importa o PROJECT_ROOT do config para a verificação de segurança do escrever_arquivo)
 from src.config import PROJECT_ROOT
 
 def execute_shell_command(command: str):
-    """Executa um comando de shell (cmd/bash) no sistema operacional."""
     try:
         system_os = platform.system()
         if system_os == "Windows": result = subprocess.run(command, shell=True, check=True, capture_output=True, text=True, encoding='oem')
@@ -22,7 +19,6 @@ def execute_shell_command(command: str):
     except Exception as e: return f"Erro inesperado no sistema: {e}"
 
 def ler_arquivo(caminho_arquivo: str) -> str:
-    """Lê o conteúdo de um arquivo de texto no caminho especificado."""
     try:
         if not os.path.exists(caminho_arquivo):
             return f"Erro de Leitura: O arquivo '{caminho_arquivo}' não foi encontrado."
@@ -38,7 +34,7 @@ def escrever_arquivo(caminho_arquivo: str, conteudo: str) -> str:
     """Cria ou sobrescreve um arquivo de texto com o conteúdo fornecido."""
     try:
         caminho_absoluto = os.path.abspath(caminho_arquivo)
-        caminho_pasta_atual = os.path.abspath(PROJECT_ROOT) # Usa o PROJECT_ROOT
+        caminho_pasta_atual = os.path.abspath(PROJECT_ROOT)
         
         if not caminho_absoluto.startswith(caminho_pasta_atual):
              return "Erro de Escrita: Operação negada. A Maia só pode escrever na pasta do projeto ou subpastas por segurança."

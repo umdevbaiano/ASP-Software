@@ -1,109 +1,138 @@
-# src/tools/persistence.py (V86 - Gerenciador de Sessões)
 import os
 import json
 import uuid
-from src.config import DB_FILE # <-- V86: Importa o novo arquivo DB
+from config import DATABASE_FILE
+from src.config import DATABASE_FILE 
+from src.auth import get_password_hash
+from typing import List, Dict, Any
 
 def _load_data():
-    """Carrega o banco de dados JSON (V86)."""
-    if os.path.exists(DB_FILE):
+    if os.path.exists(DATABASE_FILE):
         try:
-            with open(DB_FILE, 'r', encoding='utf-8') as f:
+            with open(DATABASE_FILE, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                # Garante a estrutura V86
-                if "sessions" not in data:
-                    data["sessions"] = []
-                if "notes" not in data:
-                    data["notes"] = []
+                if "users" not in data:
+                    data["users"] = []
                 return data
         except json.JSONDecodeError:
-            return {"sessions": [], "notes": []} # Cria estrutura V86
-    return {"sessions": [], "notes": []}
+            return {"users": []}
+    return {"users": []}
 
 def _save_data(data):
-    """Salva o banco de dados JSON (V86)."""
     try:
-        with open(DB_FILE, 'w', encoding='utf-8') as f:
+        with open(DATABASE_FILE, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=4)
         return True
     except Exception as e:
         print(f"[ASP] Erro Crítico de Persistência: {e}")
         return False
 
-# --- NOVAS FUNÇÕES DE SESSÃO (V86) ---
-
-def db_list_sessions() -> List[Dict[str, Any]]:
-    """Lista todas as sessões (ID e Título)."""
+def db_get_user_by_email(email: str) -> Dict[str, Any]:
     data = _load_data()
-    # Retorna apenas o ID e o título, não o histórico (para eficiência da sidebar)
-    return [{"session_id": s["session_id"], "title": s["title"]} for s in data["sessions"]]
+    return next((user for user in data["users"] if user["email"] == email), None)
 
-def db_get_session(session_id: str) -> Dict[str, Any]:
-    """Busca uma sessão específica, incluindo o histórico."""
+def db_create_user(email: str, password: str, full_name: str) -> Dict[str, Any]:
     data = _load_data()
-    session = next((s for s in data["sessions"] if s["session_id"] == session_id), None)
-    if session:
-        return session
-    return None # Retorna None se não encontrar
+    
+    if db_get_user_by_email(email):
+        return None
 
-def db_create_session(title: str = "Novo Chat") -> Dict[str, Any]:
-    """Cria uma nova sessão de chat vazia."""
+    hashed_password = get_password_hash(password)
+    
+    new_user = {
+        "user_id": str(uuid.uuid4()),
+        "email": email,
+        "full_name": full_name,
+        "hashed_password": hashed_password,
+        "sessions": [],
+        "notes": []
+    }
+    
+    data["users"].append(new_user)
+    if _save_data(data):
+        return new_user
+    return None
+
+def db_list_sessions(user_id: str) -> List[Dict[str, Any]]:
     data = _load_data()
+    user = next((u for u in data["users"] if u["user_id"] == user_id), None)
+    if not user:
+        return []
+    return [{"session_id": s["session_id"], "title": s["title"]} for s in user["sessions"]]
+
+def db_get_session(user_id: str, session_id: str) -> Dict[str, Any]:
+    data = _load_data()
+    user = next((u for u in data["users"] if u["user_id"] == user_id), None)
+    if not user:
+        return None
+    session = next((s for s in user["sessions"] if s["session_id"] == session_id), None)
+    return session
+
+def db_create_session(user_id: str, title: str = "Novo Chat") -> Dict[str, Any]:
+    """Cria uma nova sessão para um usuário."""
+    data = _load_data()
+    user = next((u for u in data["users"] if u["user_id"] == user_id), None)
+    if not user:
+        return None
+
     new_session = {
         "session_id": str(uuid.uuid4()),
         "title": title,
-        "history": [] # Começa com histórico vazio
+        "history": [] 
     }
-    data["sessions"].append(new_session)
+    user["sessions"].append(new_session)
     if _save_data(data):
         return new_session
-    return None # Retorna None em caso de falha ao salvar
+    return None 
 
-def db_update_session_history(session_id: str, history: List[Dict[str, Any]]) -> bool:
-    """Atualiza (sobrescreve) o histórico de uma sessão."""
+def db_update_session_history(user_id: str, session_id: str, history: List[Dict[str, Any]]) -> bool:
     data = _load_data()
-    session = next((s for s in data["sessions"] if s["session_id"] == session_id), None)
-    
+    user = next((u for u in data["users"] if u["user_id"] == user_id), None)
+    if not user:
+        return False
+        
+    session = next((s for s in user["sessions"] if s["session_id"] == session_id), None)
     if not session:
-        return False # Sessão não encontrada
+        return False 
         
     session["history"] = history
     return _save_data(data)
     
-def db_delete_session(session_id: str) -> bool:
-    """Exclui uma sessão."""
+def db_delete_session(user_id: str, session_id: str) -> bool:
     data = _load_data()
-    initial_count = len(data["sessions"])
-    data["sessions"] = [s for s in data["sessions"] if s["session_id"] != session_id]
+    user = next((u for u in data["users"] if u["user_id"] == user_id), None)
+    if not user:
+        return False
+        
+    initial_count = len(user["sessions"])
+    user["sessions"] = [s for s in user["sessions"] if s["session_id"] != session_id]
     
-    if len(data["sessions"]) == initial_count:
-        return False # Não encontrou
+    if len(user["sessions"]) == initial_count:
+        return False 
         
     return _save_data(data)
 
-# --- FIM DAS FUNÇÕES DE SESSÃO ---
-
-# (A função 'gerenciar_notas' (V57) permanece a mesma, 
-# mas agora usa _load_data() e _save_data() da V86, 
-# operando em data["notes"] em vez de data["lists"])
-def gerenciar_notas(operacao: str, title: str = None, content: str = None) -> str:
-    """Gerencia o CRUD de Notas (agora usa o DB_FILE V86)."""
+def gerenciar_notas(user_id: str, operacao: str, title: str = None, content: str = None) -> str:
     data = _load_data()
+    user = next((u for u in data["users"] if u["user_id"] == user_id), None)
+    if not user:
+        return "Erro: Usuário não encontrado."
+        
     operacao = operacao.upper()
 
     if operacao == 'CREATE_LIST':
-        if not title: return "Erro: Para criar uma lista, é necessário fornecer um 'title'."
-        if any(lst['title'].lower() == title.lower() for lst in data['notes']):
-            return f"Erro: Já existe uma lista com o título '{title}'."
+        if not title: return "Erro: 'title' é necessário."
+        if any(lst['title'].lower() == title.lower() for lst in user['notes']):
+            return f"Erro: A lista '{title}' já existe."
         new_list = {"id": str(uuid.uuid4()), "title": title, "items": []}
-        data['notes'].append(new_list)
+        user['notes'].append(new_list)
         if _save_data(data): return f"Sucesso: A lista '{title}' foi criada."
-        return "Erro: Falha ao salvar os dados."
+        return "Erro: Falha ao salvar."
 
     elif operacao == 'READ_ALL':
-        if not data['notes']: return "Resultado: Não há listas de notas salvas."
+        if not user['notes']: return "Resultado: Não há listas de notas salvas."
         output = ["--- RESUMO DE LISTAS PERSISTENTES ---"]
-        for lst in data['notes']:
+        for lst in user['notes']:
             item_count = len(lst['items'])
             output.append(f"\nTítulo: {lst['title']} (Itens: {item_count})")
             for item in lst.get('items', []):
@@ -113,7 +142,7 @@ def gerenciar_notas(operacao: str, title: str = None, content: str = None) -> st
 
     elif operacao == 'ADD_ITEM':
         if not title or not content: return "Erro: 'title' e 'content' são necessários."
-        list_to_update = next((lst for lst in data['notes'] if lst['title'].lower() == title.lower()), None)
+        list_to_update = next((lst for lst in user['notes'] if lst['title'].lower() == title.lower()), None)
         if not list_to_update: return f"Erro: A lista '{title}' não foi encontrada."
         
         items_to_add = [item.strip() for item in content.split(',') if item.strip()]
@@ -129,17 +158,17 @@ def gerenciar_notas(operacao: str, title: str = None, content: str = None) -> st
         return "Erro: Falha ao salvar os dados."
 
     elif operacao == 'DELETE_LIST':
-        if not title: return "Erro: Para excluir uma lista, é necessário fornecer o 'title'."
-        initial_count = len(data['notes'])
-        data['notes'] = [lst for lst in data['notes'] if lst['title'].lower() != title.lower()]
-        if len(data['notes']) == initial_count:
+        if not title: return "Erro: 'title' é necessário."
+        initial_count = len(user['notes'])
+        user['notes'] = [lst for lst in user['notes'] if lst['title'].lower() != title.lower()]
+        if len(user['notes']) == initial_count:
             return f"Resultado: Nenhuma lista com o título '{title}' foi encontrada."
         if _save_data(data): return f"Sucesso: A lista '{title}' foi removida."
         return "Erro: Falha ao salvar os dados."
 
     elif operacao == 'DELETE_ITEM':
         if not title or not content: return "Erro: 'title' e 'content' (ID do item) são necessários."
-        list_to_update = next((lst for lst in data['notes'] if lst['title'].lower() == title.lower()), None)
+        list_to_update = next((lst for lst in user['notes'] if lst['title'].lower() == title.lower()), None)
         if not list_to_update: return f"Erro: A lista '{title}' não foi encontrada."
         try: item_id_to_delete = int(content)
         except ValueError: return f"Erro: O ID do item (content) deve ser um número. O senhor forneceu '{content}'."

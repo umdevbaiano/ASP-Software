@@ -1,60 +1,66 @@
-# src/api.py (V86 - API Stateful com Sessões)
-from fastapi import FastAPI, HTTPException
+# src/api.py (V95 - Imports Absolutos)
+from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
 from typing import List, Dict, Any
 import os
 import sys
 
-from fastapi.middleware.cors import CORSMiddleware # (Mantemos o V66)
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import OAuth2PasswordRequestForm 
 
-# Adiciona a pasta 'src' ao caminho
-script_dir = os.path.dirname(os.path.abspath(__file__))
-if script_dir not in sys.path:
-    sys.path.append(script_dir)
-
-# Importa o cérebro (Stateless)
 try:
-    from core_agent import processar_turno_do_chat
+    from src.core_agent import processar_turno_do_chat_com_nome_de_usuario
+    from src.config import PROJECT_ROOT
+    from src.tools import persistence as db
+    from src.auth import (
+        create_access_token, 
+        get_current_user, 
+        verify_password,
+        decode_token 
+    )
 except ImportError as e:
-    print(f"Erro de API: Não foi possível importar o core_agent. {e}")
-    def processar_turno_do_chat(h, p): 
+    print(f"Erro de API: Não foi possível importar o core_agent ou outros módulos de 'src'. {e}")
+    print("Verifique se você está executando 'maia.py' (V96) na raiz do projeto e se 'src/__init__.py' existe.")
+
+    def processar_turno_do_chat_com_nome_de_usuario(h, p, n): 
         return h, f"Erro crítico de importação no servidor: {e}"
+    def get_current_user(token: str = ""):
+        raise HTTPException(status_code=500, detail="Erro de importação do módulo de autenticação.")
 
-# Importa as configurações e o NOVO MÓDULO DE PERSISTÊNCIA (V86)
-from config import PROJECT_ROOT
-import tools.persistence as db # (Importamos todo o módulo V86)
-
-# --- Modelos de Dados (Pydantic) ---
-
-class ChatPromptRequest(BaseModel):
+class ChatPromptRequest(BaseModel): 
     user_prompt: str
-    # O histórico não é mais enviado; usamos o session_id
 
-class SessionCreateRequest(BaseModel):
+class SessionCreateRequest(BaseModel): 
     title: str = "Novo Chat"
 
-class SessionResponse(BaseModel):
+class SessionResponse(BaseModel): 
     session_id: str
     title: str
 
-class ChatTurnResponse(BaseModel):
+class ChatTurnResponse(BaseModel): 
     maia_response: str
     session_id: str
-    # Enviamos o histórico atualizado para o frontend sincronizar
     updated_history: List[Dict[str, Any]] 
 
-# --- Inicialização da API ---
-app = FastAPI(
-    title="ASP - Maia API (V86)",
-    description="API para o Assistente Pessoal de Software (Maia), com gerenciamento de sessão.",
-    version="0.2.0"
-)
+class UserCreateRequest(BaseModel): 
+    email: str
+    password: str
+    full_name: str
 
-# --- Configuração de CORS (V66) ---
-origins = [
-    "http://localhost:3000",
-    "http://localhost:3001",
-]
+class UserResponse(BaseModel): 
+    email: str
+    full_name: str
+
+class TokenResponse(BaseModel): 
+    access_token: str
+    token_type: str
+
+app = FastAPI(
+    title="ASP - Maia API (V95)",
+    description="API para o Assistente Pessoal de Software (Maia), com autenticação de usuário.",
+    version="0.3.1"
+)
+origins = ["http://localhost:3000", "http://localhost:3001"]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -63,76 +69,99 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Endpoints da API (V86) ---
-
 @app.get("/", summary="Verificação de Status")
 def read_root():
-    """Verifica se o servidor da Maia está online."""
-    return {"status": "Maia (ASP V86 com Sessões) está online e operando."}
+    return {"status": "Maia (ASP V95 com Imports Corrigidos) está online e operando."}
 
-# --- ENDPOINTS DE SESSÃO (V86) ---
+@app.post("/api/auth/register", response_model=UserResponse, summary="Cria um novo usuário")
+def register_user(user_data: UserCreateRequest):
+    os.chdir(PROJECT_ROOT)
+    existing_user = db.db_get_user_by_email(user_data.email)
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Este email já está registrado.")
+    user = db.db_create_user(email=user_data.email, password=user_data.password, full_name=user_data.full_name)
+    if not user:
+        raise HTTPException(status_code=500, detail="Erro interno ao criar o usuário.")
+    return UserResponse(email=user["email"], full_name=user["full_name"])
 
-@app.post("/api/sessions/create", response_model=SessionResponse, summary="Cria um novo chat")
-def create_new_session(request: SessionCreateRequest):
-    """Cria uma nova sessão de chat vazia no banco de dados."""
-    os.chdir(PROJECT_ROOT) # Garante que o DB_FILE seja encontrado
-    new_session = db.db_create_session(request.title)
+@app.post("/api/auth/login", response_model=TokenResponse, summary="Login e obtenção de Token")
+def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
+    os.chdir(PROJECT_ROOT)
+    user = db.db_get_user_by_email(form_data.username)
+    if not user or not verify_password(form_data.password, user["hashed_password"]):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Email ou senha incorretos.", headers={"WWW-Authenticate": "Bearer"},)
+    access_token = create_access_token(data={"sub": user["email"]})
+    return TokenResponse(access_token=access_token, token_type="bearer")
+
+@app.post("/api/sessions/create", response_model=SessionResponse, summary="Cria um novo chat (Protegido)")
+def create_new_session(
+    request: SessionCreateRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    os.chdir(PROJECT_ROOT) 
+    user_id = current_user["user_id"]
+    new_session = db.db_create_session(user_id=user_id, title=request.title)
     if not new_session:
         raise HTTPException(status_code=500, detail="Erro ao criar sessão no banco de dados.")
     return SessionResponse(session_id=new_session["session_id"], title=new_session["title"])
 
-@app.get("/api/sessions/list", response_model=List[SessionResponse], summary="Lista todos os chats")
-def get_all_sessions():
-    """Retorna uma lista de IDs e Títulos de todos os chats (para a Sidebar)."""
+@app.get("/api/sessions/list", response_model=List[SessionResponse], summary="Lista os chats do usuário (Protegido)")
+def get_all_sessions(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
     os.chdir(PROJECT_ROOT)
-    sessions = db.db_list_sessions()
+    user_id = current_user["user_id"]
+    sessions = db.db_list_sessions(user_id=user_id)
     return sessions
 
-@app.delete("/api/sessions/{session_id}", summary="Exclui um chat")
-def delete_session(session_id: str):
-    """Exclui uma sessão de chat completa pelo ID."""
+@app.delete("/api/sessions/{session_id}", summary="Exclui um chat (Protegido)")
+def delete_session(
+    session_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
     os.chdir(PROJECT_ROOT)
-    if not db.db_delete_session(session_id):
-        raise HTTPException(status_code=404, detail="Sessão não encontrada.")
+    user_id = current_user["user_id"]
+    if not db.db_delete_session(user_id=user_id, session_id=session_id):
+        raise HTTPException(status_code=404, detail="Sessão não encontrada ou não pertence ao usuário.")
     return {"status": "sucesso", "detail": f"Sessão {session_id} excluída."}
 
-# --- ENDPOINTS DE CHAT (V86) ---
-
-@app.get("/api/chat/{session_id}", response_model=List[Dict[str, Any]], summary="Carrega um histórico de chat")
-def get_chat_history(session_id: str):
-    """Obtém o histórico completo de um chat específico."""
+@app.get("/api/chat/{session_id}", response_model=List[Dict[str, Any]], summary="Carrega um histórico de chat (Protegido)")
+def get_chat_history(
+    session_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
     os.chdir(PROJECT_ROOT)
-    session = db.db_get_session(session_id)
+    user_id = current_user["user_id"]
+    session = db.db_get_session(user_id=user_id, session_id=session_id)
     if not session:
-        raise HTTPException(status_code=404, detail="Sessão não encontrada.")
+        raise HTTPException(status_code=404, detail="Sessão não encontrada ou não pertence ao usuário.")
     return session["history"]
 
-@app.post("/api/chat/{session_id}", response_model=ChatTurnResponse, summary="Envia um prompt para um chat")
-def handle_chat_turn(session_id: str, request: ChatPromptRequest):
-    """
-    Processa um turno de chat. Carrega o histórico da sessão, 
-    envia para o Cérebro (V65), e salva o novo histórico.
-    """
+@app.post("/api/chat/{session_id}", response_model=ChatTurnResponse, summary="Envia um prompt para um chat (Protegido)")
+def handle_chat_turn(
+    session_id: str, 
+    request: ChatPromptRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
     os.chdir(PROJECT_ROOT)
+    user_id = current_user["user_id"]
+    user_name = current_user["full_name"] 
     
-    # 1. Carregar o histórico do DB
-    session = db.db_get_session(session_id)
+    session = db.db_get_session(user_id=user_id, session_id=session_id)
     if not session:
-        raise HTTPException(status_code=404, detail="Sessão não encontrada.")
+        raise HTTPException(status_code=404, detail="Sessão não encontrada ou não pertence ao usuário.")
     
     current_history = session["history"]
 
-    # 2. Processar o turno (o Cérebro V65 é stateless)
-    updated_history, maia_response_text = processar_turno_do_chat(
+    updated_history, maia_response_text = processar_turno_do_chat_com_nome_de_usuario(
         history_list=current_history,
-        user_prompt=request.user_prompt
+        user_prompt=request.user_prompt,
+        user_name=user_name
     )
 
-    # 3. Salvar o novo histórico no DB
-    if not db.db_update_session_history(session_id, updated_history):
+    if not db.db_update_session_history(user_id=user_id, session_id=session_id, history=updated_history):
         raise HTTPException(status_code=500, detail="Erro ao salvar o histórico da sessão.")
 
-    # 4. Retornar a resposta
     return ChatTurnResponse(
         maia_response=maia_response_text,
         session_id=session_id,

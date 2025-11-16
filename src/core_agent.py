@@ -1,53 +1,40 @@
-# src/core_agent.py (V65 - Refatorado para usar Dicts/JSON)
 import google.generativeai as genai
-from google.ai import generativelanguage as glm # Usado apenas para a função helper
+from google.ai import generativelanguage as glm
 import os
 from typing import List, Dict, Any
 
-# Importa a configuração (chaves) e a "Alma"
 from src.config import GEMINI_API_KEY
-from src.system_prompt import INSTRUCAO_SISTEMA
-
-# Importa TODAS as ferramentas dos módulos
+from src.system_prompt import INSTRUCAO_SISTEMA_BASE 
 from src.tools.system import execute_shell_command, ler_arquivo, escrever_arquivo
 from src.tools.persistence import gerenciar_notas
 from src.tools.web import pesquisar_na_internet, analisar_url_e_resumir
 from src.tools.calendar import agendar_evento, excluir_evento, listar_eventos
 
-# --- Configuração do Agente ---
-def initialize_model():
-    """Configura e retorna o modelo GenerativeModel com todas as ferramentas."""
-    
+def initialize_model(system_instruction: str):
     genai.configure(api_key=GEMINI_API_KEY)
-    
     all_tools = [
         execute_shell_command, pesquisar_na_internet, agendar_evento, 
         excluir_evento, listar_eventos, ler_arquivo, escrever_arquivo, 
         analisar_url_e_resumir, gerenciar_notas
     ]
-    
     model = genai.GenerativeModel(
         model_name='models/gemini-flash-latest',
-        system_instruction=INSTRUCAO_SISTEMA,
+        system_instruction=system_instruction,
         tools=all_tools
     )
     return model
 
-# --- NOVA FUNÇÃO HELPER (V65) ---
 def _content_to_dict(content: glm.Content) -> Dict[str, Any]:
-    """Converte um objeto glm.Content (da IA) em um dicionário JSON serializável."""
     parts_list = []
     for part in content.parts:
         part_dict = {}
         if part.text:
             part_dict["text"] = part.text
-        # Converte a chamada de função (se existir)
         elif hasattr(part, 'function_call'):
             part_dict["function_call"] = {
                 "name": part.function_call.name,
                 "args": dict(part.function_call.args),
             }
-        # Converte a resposta da função (se existir)
         elif hasattr(part, 'function_response'):
             part_dict["function_response"] = {
                 "name": part.function_response.name,
@@ -55,35 +42,28 @@ def _content_to_dict(content: glm.Content) -> Dict[str, Any]:
             }
         parts_list.append(part_dict)
     return {"role": content.role, "parts": parts_list}
-# --- FIM DA FUNÇÃO HELPER ---
 
-
-model = initialize_model() # Inicializa o modelo quando o servidor carregar
-
-# --- O Cérebro V65 (Refatorado para Dicts) ---
-def processar_turno_do_chat(history_list: List[Dict[str, Any]], user_prompt: str) -> (List[Dict[str, Any]], str):
-    """
-    Processa um turno, usando DICTs (JSON) para o histórico.
-    """
+def processar_turno_do_chat_com_nome_de_usuario(
+    history_list: List[Dict[str, Any]], 
+    user_prompt: str,
+    user_name: str 
+) -> (List[Dict[str, Any]], str):
+    
     try:
-        # 1. Adiciona o prompt do usuário (como dict)
+        system_instruction_com_nome = INSTRUCAO_SISTEMA_BASE.replace("[[NOME_DO_USUARIO]]", user_name)
+        model = initialize_model(system_instruction_com_nome)
+
         history_list.append({"role": "user", "parts": [{"text": user_prompt}]})
-        
-        # 2. Envia a história (List[Dict]) para a IA. 
-        # A biblioteca google-generativeai lida com a conversão interna.
         response = model.generate_content(history_list)
 
         if not response.candidates or not response.candidates[0].content.parts:
-            # Se a resposta falhar, retorna o histórico atual (com o prompt do usuário)
-            return history_list, "A comunicação com a IA falhou (resposta vazia). Verifique a chave de API."
+            return history_list, "A comunicação com a IA falhou (resposta vazia)."
 
-        # 3. CONVERTE a resposta (glm.Content) para dict
         model_response_content = response.candidates[0].content
         model_response_dict = _content_to_dict(model_response_content)
         part = model_response_dict['parts'][0]
         history_list.append(model_response_dict)
 
-        # --- Loop de Função (O "Agente") ---
         while "function_call" in part:
             function_call_dict = part["function_call"]
             
@@ -114,7 +94,6 @@ def processar_turno_do_chat(history_list: List[Dict[str, Any]], user_prompt: str
                 except Exception as e:
                     result = f"Erro inesperado na execução da ferramenta: {e}"
 
-            # Prepara a resposta da função (como dict)
             function_response_content = {
                 "role": "model",
                 "parts": [{
@@ -125,8 +104,6 @@ def processar_turno_do_chat(history_list: List[Dict[str, Any]], user_prompt: str
                 }]
             }
             history_list.append(function_response_content)
-            
-            # Chama a IA novamente
             response_2 = model.generate_content(history_list)
             
             if not response_2.candidates: 
@@ -143,5 +120,4 @@ def processar_turno_do_chat(history_list: List[Dict[str, Any]], user_prompt: str
 
     except Exception as e:
         print(f"Erro no processar_turno_do_chat: {e}")
-        # Retorna o histórico para o frontend, mesmo em caso de erro
         return history_list, f"Perdoe-me, encontrei uma anomalia na comunicação: {e}"

@@ -7,7 +7,6 @@ from googleapiclient.errors import HttpError
 from src.config import GOOGLE_SEARCH_API_KEY, GOOGLE_SEARCH_ENGINE_ID
 
 def pesquisar_na_internet(query: str):
-    """Busca informações atuais na web (snippets)."""
     try:
         print(f"[ASP] Pesquisando na web (Google Search) por: {query}")
         
@@ -39,7 +38,6 @@ def pesquisar_na_internet(query: str):
     except Exception as e: return f"Erro ao tentar pesquisar na internet: {e}"
 
 def analisar_url_e_resumir(url: str) -> str:
-    """Lê o conteúdo principal de um URL e o envia para o Gemini resumir."""
     try:
         print(f"[ASP] Analisando o conteúdo da URL: {url}")
         headers = {'User-Agent': 'Mozilla/5.0'}

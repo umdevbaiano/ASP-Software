@@ -1,148 +1,73 @@
-# 🧠 ASP (Assistente Pessoal de Software) - Maia
+🧠 ASP (Maia) - Assistente Pessoal com Agente de IA
+Bem-vindo ao repositório do ASP! 👋
 
-> **Um assistente de I.A. Full-Stack com persistência de dados, integração de calendário e interface 3D.**
+Este projeto nasceu de uma pergunta simples: "E se eu pudesse criar um assistente que não apenas conversasse comigo, mas que realmente fizesse coisas no meu computador e na nuvem?"
 
-O **ASP** é um sistema de assistente virtual inteligente projetado para aumentar a produtividade de desenvolvedores. O núcleo do sistema é a **Maia**, uma personalidade de I.A. (baseada no Google Gemini) capaz de executar tarefas reais no sistema operacional e na nuvem através de *Function Calling* (Chamada de Ferramentas).
+O resultado é a Maia, uma aplicação Full-Stack que une a inteligência do Google Gemini com a capacidade de execução de scripts Python. Não é apenas um chatbot; é um Agente de IA capaz de gerenciar minha agenda, pesquisar dados em tempo real e até organizar meus arquivos locais.
 
-Este projeto demonstra uma arquitetura robusta separando um Backend em Python (FastAPI) de um Frontend moderno em Next.js, com foco em **Clean Code**, **Persistência de Dados** e **UX/UI Interativa**.
+🚀 O que a Maia faz de verdade?
+Eu queria fugir do básico "Olá Mundo" de IA. Por isso, implementei funcionalidades reais usando Function Calling:
 
-## ✨ Funcionalidades Principais
+Ela tem "mãos" no meu SO: A Maia pode executar comandos de shell (com filtros de segurança, claro) e gerenciar arquivos locais.
 
-### 🧠 Inteligência & Backend (Python/FastAPI)
+Ela gerencia meu tempo: Integrei com a API do Google Calendar (via OAuth 2.0). Posso dizer "Agende uma reunião com o Samuel amanhã às 14h" e ela lida com tudo, inclusive detectando datas relativas como "próxima quinta-feira".
 
-  * **Cérebro Gemini:** Utiliza o modelo `gemini-1.5-flash` com *System Prompting* avançado para manter uma personalidade consistente (polida, levemente sarcástica e proativa).
-  * **Function Calling (Ferramentas Reais):** A I.A. não apenas conversa; ela executa código para:
-      * 📅 **Google Calendar:** Agendar, listar e excluir eventos reais (Integração OAuth 2.0).
-      * 🔎 **Web Search:** Pesquisar dados em tempo real (cotações, notícias) via Google Custom Search API.
-      * 📄 **Análise de Conteúdo:** Ler e resumir artigos técnicos longos via URL scraping.
-      * 💻 **Sistema Operacional:** Executar comandos de shell (com filtro de segurança).
-      * 💾 **Persistência (CRUD):** Criar e gerenciar listas de notas e tarefas salvas localmente (`JSON`).
-  * **API RESTful:** O backend expõe endpoints documentados via Swagger/OpenAPI.
+Ela vê o mundo: Diferente de modelos que param no tempo, a Maia usa a Google Custom Search API para buscar notícias, cotações e dados em tempo real.
 
-### 🎨 Interface & Frontend (Next.js/React)
+Ela tem memória: Implementei um sistema CRUD local em JSON para que ela possa guardar notas, listas e lembretes que persistem entre sessões.
 
-  * **Design Moderno:** Interface escura (*Dark Mode*) estilizada com **Tailwind CSS**.
-  * **Visualização 3D:** Fundo interativo com elementos 3D renderizados via **Three.js** e **React Three Fiber**.
-  * **Efeito Parallax:** Animações suaves de câmera baseadas no scroll usando **Framer Motion**.
-  * **Arquitetura de Chat:** Interface reativa com histórico de conversas persistente durante a sessão.
+🛠️ Por baixo do capô (Tech Stack)
+Este projeto foi um excelente desafio para estruturar uma aplicação moderna e desacoplada:
 
------
+Backend (O Cérebro): Python com FastAPI. Escolhi o FastAPI pela velocidade e pela facilidade em criar endpoints assíncronos. A arquitetura é modular, separando a lógica do agente, autenticação e ferramentas.
 
-## 🛠️ Tecnologias Utilizadas
+Frontend (O Rosto): Next.js com TypeScript. Queria algo rápido e reativo.
 
-  * **Linguagem:** Python 3.11+
-  * **Framework Backend:** FastAPI + Uvicorn
-  * **I.A.:** Google Generative AI SDK
-  * **Frontend:** Next.js 14+, React, TypeScript
-  * **Estilização:** Tailwind CSS
-  * **3D & Animação:** Three.js, React Three Fiber, Framer Motion
-  * **Segurança:** OAuthLib (Google), Python-Dotenv
+Design: Usei Tailwind CSS para um visual "Dark Mode" limpo e integrei Three.js (@react-three/fiber) para dar um toque futurista com elementos 3D no fundo.
 
------
+IA: Google Generative AI SDK (Gemini 1.5 Flash).
 
-## 🚀 Instalação e Configuração
+📦 Como rodar o projeto
+Se você quiser testar a Maia (ou usar o código como base para o seu próprio Jarvis), aqui está o caminho das pedras:
 
-Siga os passos abaixo para rodar o projeto localmente.
+1. Clone e Prepare o Backend
+Bash
 
-### Pré-requisitos
+git clone https://github.com/seu-usuario/ASP-Software.git
+cd ASP-Software
+pip install -r requirements.txt
+2. Configure as Chaves (A parte chata, mas necessária)
+Você vai precisar de algumas chaves do Google Cloud. Crie um arquivo .env na raiz (usei o .env.example como modelo) e preencha:
 
-  * Python 3.11 ou superior.
-  * Node.js 18 ou superior.
-  * Conta no Google Cloud Platform (para chaves de API).
+GEMINI_API_KEY: Para o cérebro.
 
-### 1\. Configuração do Backend
+Google Search_...: Para ela poder pesquisar na web.
 
-1.  Clone o repositório:
+Nota: Para o calendário funcionar, você precisará do arquivo credentials.json do Google Cloud (OAuth Desktop App) na pasta /data.
 
-    ```bash
-    git clone https://github.com/seu-usuario/ASP-Software.git
-    cd ASP-Software
-    ```
+3. Rode a Mágica
+Backend:
 
-2.  Instale as dependências do Python:
+Bash
 
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-3.  Configure as Variáveis de Ambiente:
-
-      * Crie um arquivo `.env` na raiz do projeto.
-      * Copie o conteúdo de `.env.example` ou adicione as suas chaves:
-
-    <!-- end list -->
-
-    ```ini
-    GEMINI_API_KEY="SUA_CHAVE_DO_GEMINI"
-    GOOGLE_SEARCH_API_KEY="SUA_CHAVE_CUSTOM_SEARCH"
-    GOOGLE_SEARCH_ENGINE_ID="SEU_ID_DE_MECANISMO_CX"
-    ```
-
-4.  Configure o Google Calendar (OAuth):
-
-      * Baixe suas credenciais OAuth 2.0 do Google Cloud Console (Tipo: Desktop App).
-      * Salve o arquivo como `credentials.json` dentro da pasta `/data` (ou na raiz, dependendo da versão).
-
-### 2\. Configuração do Frontend
-
-1.  Navegue até a pasta do frontend:
-
-    ```bash
-    cd frontend
-    ```
-
-2.  Instale as dependências do Node:
-
-    ```bash
-    npm install
-    ```
-
------
-
-## ▶️ Como Usar
-
-Você precisará de dois terminais abertos para rodar o sistema Full-Stack.
-
-### Terminal 1: Iniciar o Backend (API)
-
-Na raiz do projeto (`/ASP-Software`), execute:
-
-```bash
 python maia.py
-```
+Frontend:
 
-*O servidor iniciará em `http://127.0.0.1:8000`. Você pode acessar `http://127.0.0.1:8000/docs` para ver a documentação da API.*
+Bash
 
-### Terminal 2: Iniciar o Frontend (Interface)
-
-Na pasta do frontend (`/ASP-Software/frontend`), execute:
-
-```bash
+cd frontend
+npm install
 npm run dev
-```
+🚧 Próximos Passos
+Este projeto está em evolução constante. Algumas ideias que estou explorando:
 
-*Acesse `http://localhost:3000` no seu navegador.*
+[ ] Implementar um banco de dados real (PostgreSQL) no lugar do JSON.
 
------
+[ ] Adicionar login com reconhecimento facial (Biometria).
 
-## 📂 Estrutura do Projeto
+[ ] Transformar o módulo de notas em um Habit Tracker completo.
 
-```
-/
-├── .env                  # Segredos (NÃO COMMITAR)
-├── maia.py               # Lançador do Backend
-├── requirements.txt      # Dependências Python
-├── data/                 # Persistência (JSONs e Tokens)
-├── src/                  # Código Fonte do Backend
-│   ├── api.py            # Servidor FastAPI
-│   ├── core_agent.py     # Lógica da I.A. (Cérebro)
-│   └── tools/            # Ferramentas (Calendar, System, Web, Persistence)
-└── frontend/             # Projeto Next.js
-    ├── src/app/page.tsx  # Interface de Chat
-    └── ...
-```
 
------
 
 ## ⚠️ Notas Importantes
 
@@ -157,4 +82,4 @@ Este projeto está sob a licença MIT. Sinta-se livre para contribuir ou utiliza
 
 -----
 
-**Desenvolvido por Samuel Miranda**
+**Feito com ☕ e Python por Samuel Miranda.**

@@ -30,7 +30,6 @@ Se você quiser testar a Maia (ou usar o código como base para o seu próprio J
 
 ### 1. Clone e Prepare o Backend
 
-```bash
 git clone [https://github.com/seu-usuario/ASP-Software.git](https://github.com/seu-usuario/ASP-Software.git)
 cd ASP-Software
 pip install -r requirements.txt
@@ -39,18 +38,16 @@ pip install -r requirements.txt
 
 Você vai precisar de algumas chaves do Google Cloud. Crie um arquivo .env na raiz (usei o .env.example como modelo) e preencha:
 
-GEMINI_API_KEY: Para o cérebro.
-Google Search_...: Para ela poder pesquisar na web.
+GEMINI_API_KEY="SUA_CHAVE_DO_GEMINI" - Para o cérebro
+GOOGLE_SEARCH_API_KEY="SUA_CHAVE_CUSTOM_SEARCH" - Para buscar na Web
+GOOGLE_SEARCH_ENGINE_ID="SEU_ID_DE_MECANISMO_CX" - ID da API (diferente da Key)
 
 Nota: Para o calendário funcionar, você precisará do arquivo credentials.json do Google Cloud (OAuth Desktop App) na pasta /data.
 
 ### 3. Rode a mágica
-```bash
 python maia.py
 
 ### 4. Frontend
-
-```bash
 
 cd frontend
 npm install

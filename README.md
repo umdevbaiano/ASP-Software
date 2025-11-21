@@ -1,64 +1,63 @@
-🧠 ASP (Maia) - Assistente Pessoal com Agente de IA
-Bem-vindo ao repositório do ASP! 👋
+# 🧠 ASP (Maia) - Assistente Pessoal com Agente de IA
 
-Este projeto nasceu de uma pergunta simples: "E se eu pudesse criar um assistente que não apenas conversasse comigo, mas que realmente fizesse coisas no meu computador e na nuvem?"
+Bem-vindo ao repositório do **ASP**! 👋
 
-O resultado é a Maia, uma aplicação Full-Stack que une a inteligência do Google Gemini com a capacidade de execução de scripts Python. Não é apenas um chatbot; é um Agente de IA capaz de gerenciar minha agenda, pesquisar dados em tempo real e até organizar meus arquivos locais.
+Este projeto nasceu de uma pergunta simples: **"E se eu pudesse criar um assistente que não apenas conversasse comigo, mas que realmente *fizesse* coisas no meu computador e na nuvem?"**
 
-🚀 O que a Maia faz de verdade?
-Eu queria fugir do básico "Olá Mundo" de IA. Por isso, implementei funcionalidades reais usando Function Calling:
+O resultado é a **Maia**, uma aplicação Full-Stack que une a inteligência do Google Gemini com a capacidade de execução de scripts Python. Não é apenas um chatbot; é um **Agente de IA** capaz de gerenciar minha agenda, pesquisar dados em tempo real e até organizar meus arquivos locais.
 
-Ela tem "mãos" no meu SO: A Maia pode executar comandos de shell (com filtros de segurança, claro) e gerenciar arquivos locais.
+## 🚀 O que a Maia faz de verdade?
 
-Ela gerencia meu tempo: Integrei com a API do Google Calendar (via OAuth 2.0). Posso dizer "Agende uma reunião com o Samuel amanhã às 14h" e ela lida com tudo, inclusive detectando datas relativas como "próxima quinta-feira".
+Eu queria fugir do básico "Olá Mundo" de IA. Por isso, implementei funcionalidades reais usando *Function Calling*:
 
-Ela vê o mundo: Diferente de modelos que param no tempo, a Maia usa a Google Custom Search API para buscar notícias, cotações e dados em tempo real.
+* **Ela tem "mãos" no meu SO:** A Maia pode executar comandos de shell (com filtros de segurança, claro) e gerenciar arquivos locais.
+* **Ela gerencia meu tempo:** Integrei com a API do **Google Calendar** (via OAuth 2.0). Posso dizer *"Agende uma reunião com o Samuel amanhã às 14h"* e ela lida com tudo, inclusive detectando datas relativas como "próxima quinta-feira".
+* **Ela vê o mundo:** Diferente de modelos que param no tempo, a Maia usa a **Google Custom Search API** para buscar notícias, cotações e dados em tempo real.
+* **Ela tem memória:** Implementei um sistema CRUD local em JSON para que ela possa guardar notas, listas e lembretes que persistem entre sessões.
 
-Ela tem memória: Implementei um sistema CRUD local em JSON para que ela possa guardar notas, listas e lembretes que persistem entre sessões.
+## 🛠️ Por baixo do capô (Tech Stack)
 
-🛠️ Por baixo do capô (Tech Stack)
 Este projeto foi um excelente desafio para estruturar uma aplicação moderna e desacoplada:
 
-Backend (O Cérebro): Python com FastAPI. Escolhi o FastAPI pela velocidade e pela facilidade em criar endpoints assíncronos. A arquitetura é modular, separando a lógica do agente, autenticação e ferramentas.
+* **Backend (O Cérebro):** Python com **FastAPI**. Escolhi o FastAPI pela velocidade e pela facilidade em criar endpoints assíncronos. A arquitetura é modular, separando a lógica do agente, autenticação e ferramentas.
+* **Frontend (O Rosto):** **Next.js** com TypeScript. Queria algo rápido e reativo.
+* **Design:** Usei **Tailwind CSS** para um visual "Dark Mode" limpo e integrei **Three.js (@react-three/fiber)** para dar um toque futurista com elementos 3D no fundo.
+* **IA:** Google Generative AI SDK (Gemini 1.5 Flash).
 
-Frontend (O Rosto): Next.js com TypeScript. Queria algo rápido e reativo.
+## 📦 Como rodar o projeto
 
-Design: Usei Tailwind CSS para um visual "Dark Mode" limpo e integrei Three.js (@react-three/fiber) para dar um toque futurista com elementos 3D no fundo.
-
-IA: Google Generative AI SDK (Gemini 1.5 Flash).
-
-📦 Como rodar o projeto
 Se você quiser testar a Maia (ou usar o código como base para o seu próprio Jarvis), aqui está o caminho das pedras:
 
-1. Clone e Prepare o Backend
-Bash
+### 1. Clone e Prepare o Backend
 
-git clone https://github.com/seu-usuario/ASP-Software.git
+```bash
+git clone [https://github.com/seu-usuario/ASP-Software.git](https://github.com/seu-usuario/ASP-Software.git)
 cd ASP-Software
 pip install -r requirements.txt
-2. Configure as Chaves (A parte chata, mas necessária)
+
+### 2. Configure as Chaves (A parte chata, mas necessária)
+
 Você vai precisar de algumas chaves do Google Cloud. Crie um arquivo .env na raiz (usei o .env.example como modelo) e preencha:
 
 GEMINI_API_KEY: Para o cérebro.
-
 Google Search_...: Para ela poder pesquisar na web.
 
 Nota: Para o calendário funcionar, você precisará do arquivo credentials.json do Google Cloud (OAuth Desktop App) na pasta /data.
 
-3. Rode a Mágica
-Backend:
-
-Bash
-
+### 3. Rode a mágica
+```bash
 python maia.py
-Frontend:
 
-Bash
+### 4. Frontend
+
+```bash
 
 cd frontend
 npm install
 npm run dev
-🚧 Próximos Passos
+
+## 🚧 Próximos Passos
+
 Este projeto está em evolução constante. Algumas ideias que estou explorando:
 
 [ ] Implementar um banco de dados real (PostgreSQL) no lugar do JSON.
@@ -66,8 +65,6 @@ Este projeto está em evolução constante. Algumas ideias que estou explorando:
 [ ] Adicionar login com reconhecimento facial (Biometria).
 
 [ ] Transformar o módulo de notas em um Habit Tracker completo.
-
-
 
 ## ⚠️ Notas Importantes
 

@@ -89,8 +89,6 @@ Este projeto está em evolução constante. Algumas ideias que estou explorando:
 
 ---
 
-Feito com ☕ e Python por **Samuel Miranda**.
-
 ## ⚠️ Notas Importantes
 
   * **Primeiro Uso do Calendário:** Na primeira vez que você pedir para a Maia agendar algo, o terminal do Backend irá gerar um link de autenticação. Você deve clicar no link, autorizar e colar o código de volta no terminal.

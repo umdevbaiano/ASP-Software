@@ -30,38 +30,66 @@ Se você quiser testar a Maia (ou usar o código como base para o seu próprio J
 
 ### 1. Clone e Prepare o Backend
 
-git clone [https://github.com/seu-usuario/ASP-Software.git](https://github.com/seu-usuario/ASP-Software.git)
+```bash
+git clone https://github.com/seu-usuario/ASP-Software.git
 cd ASP-Software
 pip install -r requirements.txt
+```
 
 ### 2. Configure as Chaves (A parte chata, mas necessária)
 
-Você vai precisar de algumas chaves do Google Cloud. Crie um arquivo .env na raiz (usei o .env.example como modelo) e preencha:
+Você vai precisar de algumas chaves do Google Cloud. Crie um arquivo `.env` na raiz (usei o `.env.example` como modelo) e preencha:
 
-GEMINI_API_KEY="SUA_CHAVE_DO_GEMINI" - Para o cérebro
-GOOGLE_SEARCH_API_KEY="SUA_CHAVE_CUSTOM_SEARCH" - Para buscar na Web
-GOOGLE_SEARCH_ENGINE_ID="SEU_ID_DE_MECANISMO_CX" - ID da API (diferente da Key)
+* `GEMINI_API_KEY`: Para o cérebro.
+* `Google Search_API_KEY`: Para ela poder pesquisar na web.
+* `Google Search_ENGINE_ID`: O ID do seu mecanismo de busca personalizado.
 
-Nota: Para o calendário funcionar, você precisará do arquivo credentials.json do Google Cloud (OAuth Desktop App) na pasta /data.
+*Nota: Para o calendário funcionar, você precisará do arquivo `credentials.json` do Google Cloud (OAuth Desktop App) na pasta `/data`.*
 
-### 3. Rode a mágica
+### 3. Rode a Mágica
+
+**Backend:**
+```bash
 python maia.py
+```
+*O servidor iniciará em `http://127.0.0.1:8000`.*
 
-### 4. Frontend
-
+**Frontend:**
+```bash
 cd frontend
 npm install
 npm run dev
+```
+*Acesse `http://localhost:3000` no seu navegador.*
+
+## 📂 Estrutura do Projeto
+
+```
+/
+├── .env                  # Segredos (NÃO COMMITAR)
+├── maia.py               # Lançador do Backend
+├── requirements.txt      # Dependências Python
+├── data/                 # Persistência (JSONs e Tokens)
+├── src/                  # Código Fonte do Backend
+│   ├── api.py            # Servidor FastAPI
+│   ├── core_agent.py     # Lógica da I.A. (Cérebro)
+│   └── tools/            # Ferramentas (Calendar, System, Web, Persistence)
+└── frontend/             # Projeto Next.js
+    ├── src/app/page.tsx  # Interface de Chat
+    └── ...
+```
 
 ## 🚧 Próximos Passos
 
 Este projeto está em evolução constante. Algumas ideias que estou explorando:
 
-[ ] Implementar um banco de dados real (PostgreSQL) no lugar do JSON.
+- [ ] Implementar um banco de dados real (PostgreSQL) no lugar do JSON.
+- [ ] Adicionar login com reconhecimento facial (Biometria).
+- [ ] Transformar o módulo de notas em um Habit Tracker completo.
 
-[ ] Adicionar login com reconhecimento facial (Biometria).
+---
 
-[ ] Transformar o módulo de notas em um Habit Tracker completo.
+Feito com ☕ e Python por **Samuel Miranda**.
 
 ## ⚠️ Notas Importantes
 

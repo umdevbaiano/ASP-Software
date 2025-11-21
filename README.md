@@ -68,7 +68,7 @@ Siga os passos abaixo para rodar o projeto localmente.
 3.  Configure as Variáveis de Ambiente:
 
       * Crie um arquivo `.env` na raiz do projeto.
-      * Copie o conteúdo de `.env.example` (se existir) ou adicione as suas chaves:
+      * Copie o conteúdo de `.env.example` ou adicione as suas chaves:
 
     <!-- end list -->
 

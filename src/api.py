@@ -8,24 +8,16 @@ import sys
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm 
 
-try:
-    from src.core_agent import processar_turno_do_chat_com_nome_de_usuario
-    from src.config import PROJECT_ROOT
-    from src.tools import persistence as db
-    from src.auth import (
+
+from src.core_agent import processar_turno_do_chat_com_nome_de_usuario
+from src.config import PROJECT_ROOT
+from src.tools import persistence as db
+from src.auth import (
         create_access_token, 
         get_current_user, 
         verify_password,
         decode_token 
     )
-except ImportError as e:
-    print(f"Erro de API: Não foi possível importar o core_agent ou outros módulos de 'src'. {e}")
-    print("Verifique se você está executando 'maia.py' (V96) na raiz do projeto e se 'src/__init__.py' existe.")
-
-    def processar_turno_do_chat_com_nome_de_usuario(h, p, n): 
-        return h, f"Erro crítico de importação no servidor: {e}"
-    def get_current_user(token: str = ""):
-        raise HTTPException(status_code=500, detail="Erro de importação do módulo de autenticação.")
 
 class ChatPromptRequest(BaseModel): 
     user_prompt: str

@@ -1,0 +1,13 @@
+@echo off
+echo Iniciando o Cerebro (Backend)...
+start cmd /k "python maia.py"
+
+echo Iniciando o Servidor Visual (Frontend)...
+cd frontend
+start cmd /k "npm run dev"
+
+echo Aguardando servidores iniciarem...
+timeout /t 5
+
+echo Abrindo o App Maia...
+call npm run electron

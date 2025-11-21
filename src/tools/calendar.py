@@ -11,7 +11,6 @@ from src.config import (
     CALENDAR_TOKEN_FILE, CALENDAR_CREDENTIALS_FILE, 
     SCOPES, CALENDAR_ID, TIMEZONE
 )
-
 def autenticar_calendar():
     creds = None
     if os.path.exists(CALENDAR_TOKEN_FILE):

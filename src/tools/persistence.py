@@ -1,8 +1,7 @@
 import os
 import json
 import uuid
-from config import DATABASE_FILE
-from src.config import DATABASE_FILE 
+from src.config import DATABASE_FILE
 from src.auth import get_password_hash
 from typing import List, Dict, Any
 
